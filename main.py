@@ -1,16 +1,17 @@
-# This is a sample Python script.
+from RabbitMQFileReceiver import RabbitMQFileReceiver
+from domain.entity import ServiceConnectorEntity
 
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
+    rabbitmq_file_receiver: RabbitMQFileReceiver = RabbitMQFileReceiver(
+        broker_url="amqp://guest:guest@localhost:5672//",
+        exchange="fastapi_magic_large_files"
+    )
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    rabbitmq_file_receiver.add_service(
+        service_connector_entity=ServiceConnectorEntity(
+            url="http://127.0.0.1:12000/rinex_to_csv/upload_rinex",
+            queues=["file_chunks_queue"]
+        )
+    )
+
+    rabbitmq_file_receiver.run()
