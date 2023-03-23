@@ -1,3 +1,7 @@
+from datetime import timedelta
+
+import httpx
+
 from domain.entity import ServiceConnectorEntity
 from kombu import Connection, Exchange, Queue, serialization
 from loguru import logger
@@ -28,12 +32,7 @@ class RabbitMQFileReceiver:
                     queue.maybe_bind(conn)
                     queue.declare()
 
-                    def process_message(body, message):
-                        # Обработка сообщения
-                        logger.info(f"Received message from {message.delivery_info['routing_key']}")
-                        message.ack()
-
-                    consumer = conn.Consumer(queue, callbacks=[process_message])
+                    consumer = conn.Consumer(queue, callbacks=[self.process_message(service_connector)])
                     consumer.consume()
                     consumers.append(consumer)
 
@@ -48,4 +47,23 @@ class RabbitMQFileReceiver:
             for consumer in consumers:
                 consumer.cancel()
 
+    def process_message(self, service_connector):
+        def inner_process_message(body, message):
+            logger.info(
+                f"Received message from {message.delivery_info['routing_key']} for service {service_connector}")
 
+            try:
+                with httpx.Client() as client:
+                    timeout = timedelta(seconds=10)
+
+                    files = {"rinex": body['chunk']}
+
+                    response = client.post(service_connector.url, files=files, timeout=timeout.total_seconds())
+                response.raise_for_status()
+                logger.info(f"File sent to {service_connector.url} with response status {response.status_code}")
+                message.ack()
+
+            except Exception as e:
+                logger.error(f"Failed to send file to {service_connector.url}: {e}")
+
+        return inner_process_message
